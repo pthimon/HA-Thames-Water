@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DEFAULT_COST_PER_CUBIC_METRE, DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
+from .sensor import _DEVICE_INFO
 
 
 async def async_setup_entry(
@@ -20,9 +16,10 @@ async def async_setup_entry(
 ) -> bool:
     """Set up the Thames Water number platform."""
     meter_id = entry.data["meter_id"]
-    cost_entity = ThamesWaterCostPerCubicMetre(hass, meter_id)
-    initial_reading_entity = ThamesWaterInitialReading(hass, meter_id)
-    async_add_entities([cost_entity, initial_reading_entity])
+    async_add_entities([
+        ThamesWaterCostPerCubicMetre(hass, meter_id),
+        ThamesWaterInitialReading(hass, meter_id),
+    ])
     return True
 
 
@@ -36,22 +33,13 @@ class ThamesWaterCostPerCubicMetre(RestoreEntity, NumberEntity):
     _attr_mode = NumberMode.BOX
     _attr_name = "Thames Water Cost Per Cubic Metre"
     _attr_icon = "mdi:currency-gbp"
+    _attr_device_info = _DEVICE_INFO
 
     def __init__(self, hass: HomeAssistant, meter_id: str) -> None:
         """Initialize the number entity."""
         self._hass = hass
         self._attr_unique_id = f"cost_per_cubic_metre_{meter_id}"
         self._attr_native_value = DEFAULT_COST_PER_CUBIC_METRE
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, "thames_water")},
-            manufacturer="Thames Water",
-            model="Thames Water",
-            name="Thames Water Meter",
-        )
 
     async def async_added_to_hass(self) -> None:
         """Restore previous value on startup."""
@@ -77,22 +65,13 @@ class ThamesWaterInitialReading(RestoreEntity, NumberEntity):
     _attr_mode = NumberMode.BOX
     _attr_name = "Thames Water Initial Meter Reading"
     _attr_icon = "mdi:counter"
+    _attr_device_info = _DEVICE_INFO
 
     def __init__(self, hass: HomeAssistant, meter_id: str) -> None:
         """Initialize the number entity."""
         self._hass = hass
         self._attr_unique_id = f"initial_reading_{meter_id}"
         self._attr_native_value = None
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, "thames_water")},
-            manufacturer="Thames Water",
-            model="Thames Water",
-            name="Thames Water Meter",
-        )
 
     async def async_added_to_hass(self) -> None:
         """Restore previous value on startup."""

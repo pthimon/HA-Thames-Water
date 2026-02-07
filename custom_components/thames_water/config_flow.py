@@ -1,6 +1,5 @@
 """Config flow for Thames Water integration."""
 
-import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
