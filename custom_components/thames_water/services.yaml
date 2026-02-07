@@ -1,0 +1,23 @@
+fill_historical_data:
+  name: Fill Historical Data
+  description: >-
+    Fetches historical meter data from the Thames Water API and backfills
+    Home Assistant long-term statistics. Automatically sets the initial meter
+    reading from the earliest data point.
+  fields:
+    start_date:
+      name: Start Date
+      description: The earliest date to fetch historical data from.
+      required: true
+      example: "2024-01-01"
+      selector:
+        date:
+    end_date:
+      name: End Date
+      description: >-
+        The latest date to fetch historical data up to.
+        Defaults to 3 days ago if not specified.
+      required: false
+      example: "2025-01-01"
+      selector:
+        date:

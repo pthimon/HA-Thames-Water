@@ -5,7 +5,6 @@
   "version": "1.0",
   "config_flow": true,
   "requirements": [
-    "thameswaterclient"
   ],
   "dependencies": [
     "recorder"
@@ -13,8 +12,9 @@
   "iot_class": "cloud_polling",
   "codeowners": [
     "@AyrtonB",
-    "@ale770"
+    "@ale770",
+    "@pthimon"
   ],
-  "documentation": "hhttps://github.com/ale770/ha-thames-water",
-  "issue_tracker": "hhttps://github.com/ale770/ha-thames-water/issues"
+  "documentation": "https://github.com/pthimon/HA-Thames-Water",
+  "issue_tracker": "https://github.com/pthimon/HA-Thames-Water/issues"
 }

@@ -21,14 +21,11 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.util.unit_conversion import VolumeConverter
 
-from .const import DEFAULT_COST_PER_LITRE, DOMAIN
+from .const import DEFAULT_COST_PER_CUBIC_METRE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 SELENIUM_TIMEOUT = 60
 UPDATE_HOURS = [12, 0]
-
-INITIAL_READING = 30345
-
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities
@@ -78,13 +75,15 @@ def get_unique_id(meter_id: str) -> str:
 
 
 
-def _generate_statistics_from_meter_usage(start: date, meter_usage: MeterUsage) -> list[StatisticData]:
+def _generate_statistics_from_meter_usage(
+    start: date, meter_usage: MeterUsage, initial_reading: float
+) -> list[StatisticData]:
     """Convert a list of (datetime, reading) entries into StatisticData entries."""
     return [
         StatisticData(
             start=measurement.hour_start,
             state=measurement.usage,
-            sum=measurement.total - INITIAL_READING,
+            sum=measurement.total - initial_reading,
         )
         for measurement
         in meter_usage_lines_to_timeseries(start, meter_usage.Lines)
@@ -172,9 +171,14 @@ class ThamesWaterSensor(SensorEntity):
         if len(meter_usage.Lines) == 0:
             return
 
+        initial_reading = self._hass.data[DOMAIN].get("initial_reading")
+        if initial_reading is None:
+            _LOGGER.warning("Initial meter reading not set — skipping statistics update")
+            return
+
         # Generate new StatisticData entries using the previous cumulative sum.
-        stats = _generate_statistics_from_meter_usage(start_dt, meter_usage)
-        self._state = meter_usage.Lines[-1].Read - INITIAL_READING # most recent total usage on meter
+        stats = _generate_statistics_from_meter_usage(start_dt, meter_usage, initial_reading)
+        self._state = meter_usage.Lines[-1].Read - initial_reading  # most recent total usage on meter
 
         # Build per-hour statistics from each reading.
         metadata = StatisticMetaData(
@@ -198,7 +202,7 @@ class ThamesWaterSensor(SensorEntity):
             unit_of_measurement='£',
             unit_class=None
         )
-        cost_per_litre = self._hass.data[DOMAIN].get("cost_per_litre", DEFAULT_COST_PER_LITRE)
+        cost_per_litre = self._hass.data[DOMAIN].get("cost_per_cubic_metre", DEFAULT_COST_PER_CUBIC_METRE) / 1000
         async_add_external_statistics(self._hass, metadata, [
-            StatisticData(start=s['start'], state=s['state'] * cost_per_litre, sum=(s['sum'] - INITIAL_READING) * cost_per_litre) for s in stats
+            StatisticData(start=s['start'], state=s['state'] * cost_per_litre, sum=s['sum'] * cost_per_litre) for s in stats
         ])
