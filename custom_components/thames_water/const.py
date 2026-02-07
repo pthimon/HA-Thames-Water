@@ -1,1 +1,2 @@
 DOMAIN = "thames_water"
+DEFAULT_COST_PER_LITRE = 0.0027346

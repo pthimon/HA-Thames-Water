@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 import logging
 
-from thameswaterclient import MeterUsage, ThamesWater, meter_usage_lines_to_timeseries
+from .thameswater import MeterUsage, ThamesWater, meter_usage_lines_to_timeseries
 
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData, StatisticMeanType
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -19,12 +19,15 @@ from homeassistant.const import CONF_NAME, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_time_change
+from homeassistant.util.unit_conversion import VolumeConverter
 
-from .const import DOMAIN
+from .const import DEFAULT_COST_PER_LITRE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 SELENIUM_TIMEOUT = 60
 UPDATE_HOURS = [12, 0]
+
+INITIAL_READING = 30345
 
 
 async def async_setup_entry(
@@ -81,7 +84,7 @@ def _generate_statistics_from_meter_usage(start: date, meter_usage: MeterUsage) 
         StatisticData(
             start=measurement.hour_start,
             state=measurement.usage,
-            sum=measurement.total,
+            sum=measurement.total - INITIAL_READING,
         )
         for measurement
         in meter_usage_lines_to_timeseries(start, meter_usage.Lines)
@@ -163,7 +166,7 @@ class ThamesWaterSensor(SensorEntity):
         # readings holds all hourly data for the entire period.
 
         thames_water = ThamesWater(email=self._username, password=self._password, account_number=self._account_number)
-        meter_usage = thames_water.get_meter_usage(self._meter_id, start_dt, end_dt)
+        meter_usage = await thames_water.get_meter_usage(self._meter_id, start_dt, end_dt)
         _LOGGER.info("Fetched %d historical entries", len(meter_usage.Lines))
 
         if len(meter_usage.Lines) == 0:
@@ -171,15 +174,31 @@ class ThamesWaterSensor(SensorEntity):
 
         # Generate new StatisticData entries using the previous cumulative sum.
         stats = _generate_statistics_from_meter_usage(start_dt, meter_usage)
-        self._state = meter_usage.Lines[-1].Read  # most recent total usage on meter
+        self._state = meter_usage.Lines[-1].Read - INITIAL_READING # most recent total usage on meter
 
         # Build per-hour statistics from each reading.
         metadata = StatisticMetaData(
-            has_mean=False,
+            mean_type=StatisticMeanType.NONE,
             has_sum=True,
             name="Thames Water Consumption",
             source=DOMAIN,
             statistic_id=stat_id,
             unit_of_measurement=UnitOfVolume.LITERS,
+            unit_class=VolumeConverter.UNIT_CLASS,
         )
         async_add_external_statistics(self._hass, metadata, stats)
+
+        stat_cost_id = f"{DOMAIN}:thameswater_cost"
+        metadata = StatisticMetaData(
+            mean_type=StatisticMeanType.NONE,
+            has_sum=True,
+            name="Thames Water Cost",
+            source=DOMAIN,
+            statistic_id=stat_cost_id,
+            unit_of_measurement='£',
+            unit_class=None
+        )
+        cost_per_litre = self._hass.data[DOMAIN].get("cost_per_litre", DEFAULT_COST_PER_LITRE)
+        async_add_external_statistics(self._hass, metadata, [
+            StatisticData(start=s['start'], state=s['state'] * cost_per_litre, sum=(s['sum'] - INITIAL_READING) * cost_per_litre) for s in stats
+        ])
